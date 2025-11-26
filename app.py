@@ -1,24 +1,10 @@
-"""Minimal Flask application setup for the SQLAlchemy assignment."""
 from flask import Flask, jsonify, request
-from flask_migrate import Migrate
-from flask_sqlalchemy import SQLAlchemy
-
 from config import Config
-
-# These extension instances are shared across the app and models
-# so that SQLAlchemy can bind to the application context when the
-# factory runs.
-db = SQLAlchemy()
-migrate = Migrate()
-
+from extensions import db, migrate
+from models import User, Post
 
 def create_app(test_config=None):
-    """Application factory used by Flask and the tests.
-
-    The optional ``test_config`` dictionary can override settings such as
-    the database URL to keep student tests isolated.
-    """
-
+    
     app = Flask(__name__)
     app.config.from_object(Config)
     if test_config:
@@ -26,50 +12,74 @@ def create_app(test_config=None):
 
     db.init_app(app)
     migrate.init_app(app, db)
-
-    # Import models here so SQLAlchemy is aware of them before migrations
-    # or ``create_all`` run. Students will flesh these out in ``models.py``.
-    import models  # noqa: F401
-
+    
     @app.route("/")
     def index():
-        """Simple sanity check route."""
-
-        return jsonify({"message": "Welcome to the Flask + SQLAlchemy assignment"})
+        return jsonify({"message": "Welcome Saida to the Flask + SQLAlchemy assignment"}), 200
 
     @app.route("/users", methods=["GET", "POST"])
     def users():
-        """List or create users.
+        if request.method == "GET":
+            return jsonify([u.to_dict() for u in User.query.all()]), 200
 
-        TODO: Students should query ``User`` objects, serialize them to JSON,
-        and handle incoming POST data to create new users.
-        """
+        data = request.get_json()
+        username = data.get("username")
+        if not username:
+            return jsonify({"error": "username is required"}), 400
+        if User.query.filter_by(username=username).first():
+            return jsonify({"error": "username already exists"}), 400
 
-        return (
-            jsonify({"message": "TODO: implement user listing/creation"}),
-            501,
-        )
+        new_user = User(username=username)
+        db.session.add(new_user)
+        db.session.commit()
+        return jsonify(new_user.to_dict()), 201
 
     @app.route("/posts", methods=["GET", "POST"])
     def posts():
-        """List or create posts.
+        if request.method == "GET":
+            return jsonify([p.to_dict() for p in Post.query.all()]), 200
 
-        TODO: Students should query ``Post`` objects, include user data, and
-        allow creating posts tied to a valid ``user_id``.
-        """
+        data = request.get_json()
+        title = data.get("title")
+        content = data.get("content")
+        user_id = data.get("user_id")
 
-        return (
-            jsonify({"message": "TODO: implement post listing/creation"}),
-            501,
-        )
+        if not all([title, content, user_id]):
+            return jsonify({"error": "title, content and user_id are required"}), 400
+
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"error": "user_id does not exist"}), 400
+
+        new_post = Post(title=title, content=content, user_id=user_id)
+        db.session.add(new_post)
+        db.session.commit()
+        return jsonify(new_post.to_dict()), 201
 
     return app
 
-
-# Expose a module-level application for convenience with certain tools
 app = create_app()
 
-
 if __name__ == "__main__":
-    # Running ``python app.py`` starts the development server.
     app.run(debug=True)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# create Posts : Invoke-RestMethod -Uri http://127.0.0.1:5000/users -Method POST -ContentType "application/json" -Body '{"username":"saida"}'
+# create Users : Invoke-RestMethod -Uri http://127.0.0.1:5000/posts -Method POST -ContentType "application/json" -Body '{"title":"Hello","content":"My first post","user_id":1}'
+# get all users : Invoke-RestMethod -Uri http://127.0.0.1:5000/users -Method GET
+# get all posts : Invoke-RestMethod -Uri http://127.0.0.1:5000/posts -Method GET
